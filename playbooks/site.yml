@@ -1,0 +1,19 @@
+- name: Bootstrap the k3s server
+  hosts: k3s_servers
+  become: true
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - role: common
+      tags: [common]
+    - role: firewall
+      tags: [firewall]
+    - role: k3s
+      tags: [k3s]
+    - role: argocd
+      tags: [argocd]
+    - role: kubeconfig
+      tags: [k3s, kubeconfig]
+
+- name: Show the state of the cluster
+  ansible.builtin.import_playbook: check.yml

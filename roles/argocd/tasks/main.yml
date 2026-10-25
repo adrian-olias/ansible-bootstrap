@@ -1,0 +1,90 @@
+# k3s installs anything dropped in its manifests folder, and HelmChart
+# resources are installed by the Helm controller that comes with k3s.
+- name: Install Argo CD with the k3s Helm controller
+  ansible.builtin.copy:
+    dest: /var/lib/rancher/k3s/server/manifests/argocd.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: {{ argocd_namespace }}
+      ---
+      apiVersion: helm.cattle.io/v1
+      kind: HelmChart
+      metadata:
+        name: argocd
+        namespace: kube-system
+      spec:
+        repo: https://argoproj.github.io/argo-helm
+        chart: argo-cd
+        version: "{{ argocd_chart_version }}"
+        targetNamespace: {{ argocd_namespace }}
+        valuesContent: |-
+          fullnameOverride: argocd
+          dex:
+            enabled: false
+
+# The Helm controller needs a moment to pick the chart up, so the
+# Deployment may not exist yet on the first tries.
+- name: Wait for the Argo CD server to be ready
+  ansible.builtin.command: >-
+    k3s kubectl -n {{ argocd_namespace }}
+    rollout status deployment/argocd-server --timeout=60s
+  register: argocd_rollout
+  until: argocd_rollout.rc == 0
+  retries: 20
+  delay: 15
+  changed_when: false
+
+- name: Give Argo CD read access to argocd-config
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f -
+    stdin: "{{ repo_secret | to_json }}"
+  vars:
+    repo_secret:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: repo-argocd-config
+        namespace: "{{ argocd_namespace }}"
+        labels:
+          argocd.argoproj.io/secret-type: repository
+      stringData:
+        type: git
+        url: "{{ argocd_config_repo }}"
+        sshPrivateKey: "{{ lookup('ansible.builtin.file', argocd_config_deploy_key | expanduser) }}"
+  register: argocd_repo_secret
+  changed_when: "'unchanged' not in argocd_repo_secret.stdout"
+  when: argocd_config_deploy_key | default('') | length > 0
+  no_log: true
+
+# The only Application created by hand. Everything else comes from Git.
+- name: Create the root Application
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f -
+    stdin: "{{ root_app | to_json }}"
+  vars:
+    root_app:
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: root
+        namespace: "{{ argocd_namespace }}"
+      spec:
+        project: default
+        source:
+          repoURL: "{{ argocd_config_repo }}"
+          targetRevision: "{{ argocd_config_revision }}"
+          path: bootstrap
+        destination:
+          server: https://kubernetes.default.svc
+          namespace: "{{ argocd_namespace }}"
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
+  register: argocd_root_app
+  changed_when: "'unchanged' not in argocd_root_app.stdout"

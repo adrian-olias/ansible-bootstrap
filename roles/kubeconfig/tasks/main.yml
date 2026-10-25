@@ -1,0 +1,21 @@
+# Copies the k3s kubeconfig to the machine running Ansible.
+- name: Make sure the local .kube directory exists
+  ansible.builtin.file:
+    path: "{{ kubeconfig_dest | dirname }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Fetch the kubeconfig
+  ansible.builtin.fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ kubeconfig_dest }}"
+    flat: true
+
+- name: Keep the local kubeconfig private
+  ansible.builtin.file:
+    path: "{{ kubeconfig_dest }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false

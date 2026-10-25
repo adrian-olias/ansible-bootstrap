@@ -1,0 +1,20 @@
+# Read-only: changes nothing on the server.
+- name: Show the state of the cluster
+  hosts: k3s_servers
+  become: true
+  gather_facts: false
+  vars_files:
+    - ../vars/main.yml
+  tasks:
+    - name: Read nodes and Argo CD applications
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - k3s kubectl get nodes -o wide
+        - k3s kubectl -n {{ argocd_namespace }} get applications
+      register: cluster_status
+      changed_when: false
+      failed_when: false
+
+    - name: Print them
+      ansible.builtin.debug:
+        msg: "{{ cluster_status.results | map(attribute='stdout_lines') | list }}"

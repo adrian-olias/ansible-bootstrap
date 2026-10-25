@@ -1,0 +1,55 @@
+- name: Create the k3s config directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the k3s config
+  ansible.builtin.copy:
+    dest: /etc/rancher/k3s/config.yaml
+    content: "{{ k3s_settings | to_nice_yaml }}"
+    owner: root
+    group: root
+    mode: "0600"
+  vars:
+    k3s_settings:
+      write-kubeconfig-mode: "0600"
+      # Encrypt Secrets at rest in the datastore.
+      secrets-encryption: true
+      tls-san: "{{ k3s_tls_san }}"
+  register: k3s_config
+
+- name: Download the k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /usr/local/bin/k3s-install.sh
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Read the installed k3s version
+  ansible.builtin.command: k3s --version
+  register: k3s_installed
+  changed_when: false
+  failed_when: false
+
+# The script installs or upgrades, and starts k3s with the config above.
+- name: Install or upgrade k3s
+  ansible.builtin.command: /usr/local/bin/k3s-install.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+  when: k3s_version not in (k3s_installed.stdout | default(''))
+  register: k3s_install
+  changed_when: true
+
+- name: Restart k3s to apply a config change
+  ansible.builtin.service:
+    name: k3s
+    state: restarted
+  when: k3s_config.changed and k3s_install is skipped
+
+- name: Wait for the node to be Ready
+  ansible.builtin.command: k3s kubectl wait --for=condition=Ready node --all --timeout=180s
+  changed_when: false

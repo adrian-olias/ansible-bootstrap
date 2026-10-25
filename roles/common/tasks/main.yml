@@ -1,0 +1,51 @@
+- name: Upgrade installed packages
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: safe
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - unattended-upgrades
+    state: present
+
+- name: Turn on automatic security updates
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Set the timezone
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+# Drop-in files are read in order and the first value wins, so this one has to
+# sort before 50-cloud-init.conf, which turns password login on in some images.
+- name: Allow SSH with keys only and no root login
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-hardening.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+    owner: root
+    group: root
+    mode: "0644"
+  register: ssh_hardening
+
+- name: Check the SSH configuration before restarting
+  ansible.builtin.command: sshd -t
+  changed_when: false
+
+- name: Restart SSH to apply it
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+  when: ssh_hardening.changed
