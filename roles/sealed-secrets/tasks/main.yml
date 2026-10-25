@@ -1,0 +1,71 @@
+# On a rebuilt cluster, put the old key back before the controller starts, so
+# it keeps decrypting the SealedSecrets already in Git instead of making a new key.
+- name: Restore the sealing key from the local backup
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f -
+    stdin: "{{ lookup('ansible.builtin.file', sealed_secrets_key_backup) }}"
+  register: sealed_secrets_restore
+  changed_when: "'unchanged' not in sealed_secrets_restore.stdout"
+  when: sealed_secrets_key_backup is file
+  no_log: true
+
+# kubeseal looks for a controller called sealed-secrets-controller in
+# kube-system by default, hence the fullnameOverride.
+- name: Install the Sealed Secrets controller with the k3s Helm controller
+  ansible.builtin.copy:
+    dest: /var/lib/rancher/k3s/server/manifests/sealed-secrets.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      apiVersion: helm.cattle.io/v1
+      kind: HelmChart
+      metadata:
+        name: sealed-secrets
+        namespace: kube-system
+      spec:
+        repo: https://bitnami.github.io/sealed-secrets
+        chart: sealed-secrets
+        version: "{{ sealed_secrets_chart_version }}"
+        targetNamespace: kube-system
+        valuesContent: |-
+          fullnameOverride: sealed-secrets-controller
+
+- name: Wait for the controller to be ready
+  ansible.builtin.command: >-
+    k3s kubectl -n kube-system
+    rollout status deployment/sealed-secrets-controller --timeout=60s
+  register: sealed_secrets_rollout
+  until: sealed_secrets_rollout.rc == 0
+  retries: 20
+  delay: 15
+  changed_when: false
+
+# The controller creates its key on first start.
+- name: Read the sealing key
+  ansible.builtin.command: >-
+    k3s kubectl -n kube-system get secret
+    -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml
+  register: sealed_secrets_key
+  until: "'kind: Secret' in sealed_secrets_key.stdout"
+  retries: 10
+  delay: 6
+  changed_when: false
+  no_log: true
+
+- name: Make sure the local backup folder exists
+  ansible.builtin.file:
+    path: "{{ sealed_secrets_key_backup | dirname }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Back the sealing key up on this machine
+  ansible.builtin.copy:
+    content: "{{ sealed_secrets_key.stdout }}"
+    dest: "{{ sealed_secrets_key_backup }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  no_log: true

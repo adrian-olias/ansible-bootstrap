@@ -17,8 +17,15 @@ kubeconfig_dest: "{{ lookup('ansible.builtin.env', 'HOME') }}/.kube/{{ inventory
 argocd_namespace: argocd
 # Version of the argo-cd Helm chart, not of Argo CD itself.
 argocd_chart_version: "10.11.1"
-argocd_config_repo: git@github.com:adrian-olias/argocd-config.git
-argocd_config_revision: main
-# Read-only deploy key of argocd-config, on the machine running Ansible.
+wrappers_repo: git@github.com:adrian-olias/helm-charts-wrappers.git
+wrappers_revision: main
+# Read-only deploy key of helm-charts-wrappers, on the machine running Ansible.
 # Set it to "" once the repo is public.
-argocd_config_deploy_key: ~/.ssh/argocd_config_deploy
+wrappers_deploy_key: ~/.ssh/helm_charts_wrappers_deploy
+
+# Sealed Secrets
+# Version of the sealed-secrets Helm chart (controller 0.40.0).
+sealed_secrets_chart_version: "2.20.0"
+# Copy of the key that decrypts every SealedSecret, on the machine running
+# Ansible. Without it, a rebuilt cluster cannot read the secrets in Git.
+sealed_secrets_key_backup: "{{ lookup('ansible.builtin.env', 'HOME') }}/.sealed-secrets/{{ inventory_hostname }}-key.yaml"

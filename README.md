@@ -2,7 +2,7 @@
 
 Playbooks to take a fresh VPS to a working k3s cluster with Argo CD.
 After that, everything on the cluster is managed from
-[argocd-config](https://github.com/adrian-olias/argocd-config).
+[helm-charts-wrappers](https://github.com/adrian-olias/helm-charts-wrappers).
 
 ```
 playbooks/   what you run
@@ -21,8 +21,17 @@ vars/        versions and settings, in one place
 | `common` | upgrades packages, turns on security updates, SSH with keys only |
 | `firewall` | ufw: only 22, 80 and 443 open. The API server stays closed |
 | `k3s` | installs a pinned k3s version |
-| `argocd` | installs Argo CD and creates the `root` Application |
+| `sealed-secrets` | installs the Sealed Secrets controller and backs its key up on this machine |
+| `argocd` | installs Argo CD and creates the ApplicationSet that reads the namespace files of helm-charts-wrappers |
 | `kubeconfig` | copies the kubeconfig to the machine running Ansible |
+
+## The Sealed Secrets key
+
+Every SealedSecret in Git can only be decrypted with the controller's key.
+`site.yml` saves a copy to `~/.sealed-secrets/<host>-key.yaml` and, on a new
+cluster, puts it back before the controller starts. Keep another copy
+somewhere safe (a password manager): if both the server and this machine are
+lost, every secret has to be sealed again.
 
 ## Before the first run
 
@@ -41,13 +50,13 @@ vars/        versions and settings, in one place
              ansible_ssh_private_key_file: ~/.ssh/id_ed25519_vps
    ```
 
-3. A read-only deploy key for argocd-config, while that repo is private:
+3. A read-only deploy key for helm-charts-wrappers, while that repo is private:
 
    ```bash
-   ssh-keygen -t ed25519 -N "" -C "argocd" -f ~/.ssh/argocd_config_deploy
+   ssh-keygen -t ed25519 -N "" -C "argocd" -f ~/.ssh/helm_charts_wrappers_deploy
    ```
 
-   Add the `.pub` part under argocd-config → Settings → Deploy keys.
+   Add the `.pub` part under helm-charts-wrappers → Settings → Deploy keys.
 
 ## Run
 

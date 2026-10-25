@@ -10,6 +10,8 @@
       tags: [firewall]
     - role: k3s
       tags: [k3s]
+    - role: sealed-secrets
+      tags: [sealed-secrets]
     - role: argocd
       tags: [argocd]
     - role: kubeconfig

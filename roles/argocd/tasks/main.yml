@@ -39,7 +39,7 @@
   delay: 15
   changed_when: false
 
-- name: Give Argo CD read access to argocd-config
+- name: Give Argo CD read access to helm-charts-wrappers
   ansible.builtin.command:
     cmd: k3s kubectl apply -f -
     stdin: "{{ repo_secret | to_json }}"
@@ -48,43 +48,69 @@
       apiVersion: v1
       kind: Secret
       metadata:
-        name: repo-argocd-config
+        name: repo-helm-charts-wrappers
         namespace: "{{ argocd_namespace }}"
         labels:
           argocd.argoproj.io/secret-type: repository
       stringData:
         type: git
-        url: "{{ argocd_config_repo }}"
-        sshPrivateKey: "{{ lookup('ansible.builtin.file', argocd_config_deploy_key | expanduser) }}"
+        url: "{{ wrappers_repo }}"
+        sshPrivateKey: "{{ lookup('ansible.builtin.file', wrappers_deploy_key | expanduser) }}"
   register: argocd_repo_secret
   changed_when: "'unchanged' not in argocd_repo_secret.stdout"
-  when: argocd_config_deploy_key | default('') | length > 0
+  when: wrappers_deploy_key | default('') | length > 0
   no_log: true
 
-# The only Application created by hand. Everything else comes from Git.
-- name: Create the root Application
+# The only Argo CD object created by hand. It turns every <name>-<env>.yaml
+# in argocd-wrapper/ of helm-charts-wrappers into an Application, and from
+# there everything comes from Git.
+# The {{ }} below belong to Argo CD, so !unsafe stops Ansible from reading them.
+- name: Create the ApplicationSet of the namespaces
   ansible.builtin.command:
     cmd: k3s kubectl apply -f -
-    stdin: "{{ root_app | to_json }}"
+    stdin: "{{ namespaces_appset | to_json }}"
   vars:
-    root_app:
+    namespaces_appset:
       apiVersion: argoproj.io/v1alpha1
-      kind: Application
+      kind: ApplicationSet
       metadata:
-        name: root
+        name: namespaces
         namespace: "{{ argocd_namespace }}"
       spec:
-        project: default
-        source:
-          repoURL: "{{ argocd_config_repo }}"
-          targetRevision: "{{ argocd_config_revision }}"
-          path: bootstrap
-        destination:
-          server: https://kubernetes.default.svc
-          namespace: "{{ argocd_namespace }}"
-        syncPolicy:
-          automated:
-            prune: true
-            selfHeal: true
-  register: argocd_root_app
-  changed_when: "'unchanged' not in argocd_root_app.stdout"
+        goTemplate: true
+        goTemplateOptions: ["missingkey=error"]
+        generators:
+          - git:
+              repoURL: "{{ wrappers_repo }}"
+              revision: "{{ wrappers_revision }}"
+              files:
+                # The dash leaves out Chart.yaml.
+                - path: argocd-wrapper/*-*.yaml
+        template:
+          metadata:
+            name: !unsafe 'namespace-{{ trimSuffix ".yaml" .path.filename }}'
+          spec:
+            project: default
+            source:
+              repoURL: "{{ wrappers_repo }}"
+              targetRevision: "{{ wrappers_revision }}"
+              path: argocd-wrapper
+              helm:
+                valueFiles:
+                  - !unsafe '{{ .path.filename }}'
+                # Same for every namespace, so they live here and not in each file.
+                valuesObject:
+                  argocd-template:
+                    argocdNamespace: "{{ argocd_namespace }}"
+                    repo:
+                      url: "{{ wrappers_repo }}"
+                      revision: "{{ wrappers_revision }}"
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: "{{ argocd_namespace }}"
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+  register: argocd_namespaces_appset
+  changed_when: "'unchanged' not in argocd_namespaces_appset.stdout"
