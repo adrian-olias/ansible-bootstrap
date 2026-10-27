@@ -1,8 +1,9 @@
 # Read-only: changes nothing on the server.
 - name: Show the state of the cluster
-  hosts: localhost
+  hosts: vps
   connection: ssh
   become: true
+  become_method: sudo
   gather_facts: false
   vars_files:
     - vars/connection.yaml

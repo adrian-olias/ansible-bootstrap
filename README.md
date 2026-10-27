@@ -68,13 +68,13 @@ ansible-galaxy collection install -r collections/requirements.yaml
 Check the playbook syntax first:
 
 ```bash
-ansible-playbook site.yaml --syntax-check
+ansible-playbook -i 'vps,' site.yaml --syntax-check
 ```
 
 If the syntax check passes, run the bootstrap:
 
 ```bash
-ansible-playbook site.yaml
+ansible-playbook -i 'vps,' site.yaml
 ```
 
 ## What it installs
@@ -100,5 +100,5 @@ The Sealed Secrets key backup is stored outside the repository in
 To check the cluster status at any time:
 
 ```bash
-ansible-playbook check.yaml
+ansible-playbook -i 'vps,' check.yaml
 ```
