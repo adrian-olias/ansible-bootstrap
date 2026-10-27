@@ -1,88 +1,104 @@
 # ansible-bootstrap
 
-Playbooks to take a fresh VPS to a working k3s cluster with Argo CD.
-After that, everything on the cluster is managed from
-[helm-charts-wrappers](https://github.com/adrian-olias/helm-charts-wrappers).
+Playbooks to set up an Ubuntu VPS with k3s, Argo CD and Sealed Secrets.
 
+Ansible runs from our computer or from WSL and connects to the VPS over SSH.
+The VPS does not need Ansible installed.
+
+## Structure
+
+```text
+vars/        connection, server and application configuration
+roles/       tasks for each part of the server
 ```
-playbooks/   what you run
-roles/       one role per piece of the server, each one a single tasks/main.yml
-vars/        versions and settings, in one place
+
+## Playbooks
+
+- `site.yaml`: sets up the whole VPS. It can be run again.
+- `kubeconfig.yaml`: copies the kubeconfig to our computer.
+- `check.yaml`: shows the status of the node and Argo CD applications.
+
+## Before starting
+
+We need:
+
+- an Ubuntu VPS;
+- SSH access with a key;
+- Ansible installed in WSL or Linux;
+- a deploy key for `helm-charts-wrappers` if the repository is private.
+
+The playbooks connect to the SSH alias `vps` from `~/.ssh/config`, so the VPS
+address stays outside the project. Variables are split by responsibility:
+
+```yaml
+# vars/connection.yaml
+ansible_host: vps
+ansible_user: ubuntu
 ```
 
-| Playbook | |
-|---|---|
-| `site.yml` | the whole bootstrap. Safe to run again |
-| `kubeconfig.yml` | only copies the kubeconfig, e.g. on a new laptop |
-| `check.yml` | read-only: nodes and Argo CD apps |
+The SSH config contains the VPS address and the local key path. It is not part
+of this repository.
 
-| Role | |
-|---|---|
-| `common` | upgrades packages, turns on security updates, SSH with keys only |
-| `firewall` | ufw: only 22, 80 and 443 open. The API server stays closed |
-| `k3s` | installs a pinned k3s version |
-| `sealed-secrets` | installs the Sealed Secrets controller and backs its key up on this machine |
-| `argocd` | installs Argo CD and creates the ApplicationSet that reads the namespace files of helm-charts-wrappers |
-| `kubeconfig` | copies the kubeconfig to the machine running Ansible |
+The playbooks load only the variable files they need:
 
-## The Sealed Secrets key
+- `site.yaml`: connection, server, Argo CD, Sealed Secrets and kubeconfig;
+- `check.yaml`: connection and Argo CD;
+- `kubeconfig.yaml`: connection and kubeconfig.
 
-Every SealedSecret in Git can only be decrypted with the controller's key.
-`site.yml` saves a copy to `~/.sealed-secrets/<host>-key.yaml` and, on a new
-cluster, puts it back before the controller starts. Keep another copy
-somewhere safe (a password manager): if both the server and this machine are
-lost, every secret has to be sealed again.
-
-## Before the first run
-
-1. A VPS with Ubuntu LTS and your SSH key on it.
-2. An `inventory.yml` at the root of the repo. It is git-ignored, since it has
-   the IP of the server:
-
-   ```yaml
-   all:
-     children:
-       k3s_servers:
-         hosts:
-           vps:
-             ansible_host: <vps-ip>
-             ansible_user: ubuntu
-             ansible_ssh_private_key_file: ~/.ssh/id_ed25519_vps
-   ```
-
-3. A read-only deploy key for helm-charts-wrappers, while that repo is private:
-
-   ```bash
-   ssh-keygen -t ed25519 -N "" -C "argocd" -f ~/.ssh/helm_charts_wrappers_deploy
-   ```
-
-   Add the `.pub` part under helm-charts-wrappers → Settings → Deploy keys.
-
-## Run
-
-From Linux or WSL, at the root of the repo:
+If `helm-charts-wrappers` is private, create a deploy key and add it on
+GitHub:
 
 ```bash
-ansible-galaxy collection install -r requirements.yml
-ansible-playbook playbooks/site.yml
+ssh-keygen -t ed25519 -N "" -C "argocd" \
+  -f ~/.ssh/helm_charts_wrappers_deploy
 ```
 
-If the repo lives on a Windows drive (`/mnt/c/...`), Ansible ignores
-`ansible.cfg` there, so point to it: `export ANSIBLE_CONFIG=$PWD/ansible.cfg`.
+Add the `.pub` file under **Deploy keys** in the repository.
 
-## Reaching the cluster
+## First deployment
 
-Port 6443 is closed to the internet, so go through SSH:
+From WSL, go to this folder and install Ansible and the required collection:
 
 ```bash
-ssh -N -L 6443:127.0.0.1:6443 ubuntu@<vps-ip> &
+sudo apt update
+sudo apt install -y ansible
+ansible-galaxy collection install -r collections/requirements.yaml
+```
+
+Check the playbook syntax first:
+
+```bash
+ansible-playbook site.yaml --syntax-check
+```
+
+If the syntax check passes, run the bootstrap:
+
+```bash
+ansible-playbook site.yaml
+```
+
+## What it installs
+
+- automatic updates and basic Ubuntu configuration;
+- SSH access using a key, with direct `root` login disabled;
+- UFW with ports 22, 80 and 443 open;
+- k3s;
+- Sealed Secrets;
+- Argo CD.
+
+Port 6443 is not exposed to the Internet. To access the Kubernetes API:
+
+```bash
+ssh -N -L 6443:127.0.0.1:6443 vps
 export KUBECONFIG=~/.kube/vps.yaml
 kubectl get nodes
 ```
 
-Argo CD UI:
+The Sealed Secrets key backup is stored outside the repository in
+`~/.sealed-secrets/`. Do not commit it to Git.
+
+To check the cluster status at any time:
 
 ```bash
-kubectl -n argocd port-forward svc/argocd-server 8080:443
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
+ansible-playbook check.yaml
 ```

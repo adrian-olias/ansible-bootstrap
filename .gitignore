@@ -1,11 +1,14 @@
-# Real inventory: has the VPS address
-inventory.yml
-
 # Never commit keys. The kubeconfig is copied to ~/.kube, outside the repo.
 *.pem
 *.key
 id_rsa*
 id_ed25519*
+ssh_key_*
+*.pub
+
+# Local cluster credentials and backups
+.kube/
+.sealed-secrets/
 
 # Ansible
 *.retry

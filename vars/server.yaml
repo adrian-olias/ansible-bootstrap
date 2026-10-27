@@ -1,0 +1,7 @@
+timezone: Europe/Madrid
+
+firewall_open_ports: [22, 80, 443]
+firewall_trusted_cidrs: [10.42.0.0/16, 10.43.0.0/16]
+
+k3s_version: v1.36.5+k3s1
+k3s_tls_san: []

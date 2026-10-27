@@ -1,10 +1,12 @@
 # Read-only: changes nothing on the server.
 - name: Show the state of the cluster
-  hosts: k3s_servers
+  hosts: localhost
+  connection: ssh
   become: true
   gather_facts: false
   vars_files:
-    - ../vars/main.yml
+    - vars/connection.yaml
+    - vars/argocd.yaml
   tasks:
     - name: Read nodes and Argo CD applications
       ansible.builtin.command: "{{ item }}"
