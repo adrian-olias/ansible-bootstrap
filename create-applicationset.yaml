@@ -1,0 +1,12 @@
+- name: Create the Argo CD ApplicationSet
+  hosts: vps
+  connection: ssh
+  become: true
+  become_method: sudo
+  vars_files:
+    - vars/connection.yaml
+    - vars/argocd.yaml
+    - vars/applications.yaml
+  roles:
+    - role: argocd-applicationset
+      tags: [argocd-applicationset]

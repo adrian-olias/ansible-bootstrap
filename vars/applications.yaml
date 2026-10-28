@@ -1,0 +1,3 @@
+wrappers_repo: git@github.com:adrian-olias/helm-charts-wrappers.git
+wrappers_revision: main
+wrappers_deploy_key: ~/.ssh/helm_charts_wrappers_deploy

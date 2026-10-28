@@ -1,0 +1,60 @@
+- name: Delete the Argo CD ApplicationSet
+  hosts: vps
+  connection: ssh
+  become: true
+  become_method: sudo
+  gather_facts: false
+  vars_files:
+    - vars/connection.yaml
+    - vars/argocd.yaml
+    - vars/applications.yaml
+  vars:
+    confirm_delete_applications: false
+  tasks:
+    - name: Require explicit confirmation
+      ansible.builtin.assert:
+        that:
+          - confirm_delete_applications | bool
+        fail_msg: >-
+          This is destructive. Re-run with
+          -e confirm_delete_applications=true to continue.
+
+    - name: Delete the current ApplicationSet
+      ansible.builtin.command:
+        cmd: >-
+          k3s kubectl -n {{ argocd_namespace }}
+          delete applicationset applications
+          --ignore-not-found
+      changed_when: true
+
+    - name: Delete the current generated application
+      ansible.builtin.command:
+        cmd: >-
+          k3s kubectl -n {{ argocd_namespace }}
+          delete application portfolio-prod
+          --ignore-not-found
+      changed_when: true
+
+    - name: Delete the previous ApplicationSet name
+      ansible.builtin.command:
+        cmd: >-
+          k3s kubectl -n {{ argocd_namespace }}
+          delete applicationset namespaces
+          --ignore-not-found
+      changed_when: true
+
+    - name: Delete the previous generated application name
+      ansible.builtin.command:
+        cmd: >-
+          k3s kubectl -n {{ argocd_namespace }}
+          delete application namespace-portfolio-prod
+          --ignore-not-found
+      changed_when: true
+
+    - name: Delete the wrappers repository Secret
+      ansible.builtin.command:
+        cmd: >-
+          k3s kubectl -n {{ argocd_namespace }}
+          delete secret repo-helm-charts-wrappers
+          --ignore-not-found
+      changed_when: true

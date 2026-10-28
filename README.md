@@ -14,9 +14,15 @@ roles/       tasks for each part of the server
 
 ## Playbooks
 
-- `site.yaml`: sets up the whole VPS. It can be run again.
+- `site.yaml`: sets up the infrastructure. It can be run again.
+- `create-applicationset.yaml`: creates the Argo CD ApplicationSet
+  from
+  `helm-charts-wrappers`. Run it only after that repository and its charts are
+  ready.
+- `delete-applicationset.yaml`: removes the wrappers ApplicationSet and its
+  generated application after explicit confirmation.
 - `kubeconfig.yaml`: copies the kubeconfig to our computer.
-- `check.yaml`: shows the status of the node and Argo CD applications.
+- `check.yaml`: shows the status of the node and any Argo CD applications.
 
 ## Before starting
 
@@ -41,12 +47,13 @@ of this repository.
 
 The playbooks load only the variable files they need:
 
-- `site.yaml`: connection, server, Argo CD, Sealed Secrets and kubeconfig;
+- `site.yaml`: connection, server, Sealed Secrets and kubeconfig;
+- `create-applicationset.yaml`: connection and Argo CD ApplicationSet configuration;
 - `check.yaml`: connection and Argo CD;
 - `kubeconfig.yaml`: connection and kubeconfig.
 
-If `helm-charts-wrappers` is private, create a deploy key and add it on
-GitHub:
+If `helm-charts-wrappers` is private, create a deploy key before running
+`create-applicationset.yaml` and add it on GitHub:
 
 ```bash
 ssh-keygen -t ed25519 -N "" -C "argocd" \
@@ -77,6 +84,9 @@ If the syntax check passes, run the bootstrap:
 ansible-playbook -i 'vps,' site.yaml
 ```
 
+This installs the infrastructure only. It does not configure the wrappers
+repository or create applications.
+
 ## What it installs
 
 - automatic updates and basic Ubuntu configuration;
@@ -102,3 +112,22 @@ To check the cluster status at any time:
 ```bash
 ansible-playbook -i 'vps,' check.yaml
 ```
+
+After the charts and wrappers repository are ready, configure the Argo CD
+applications with:
+
+```bash
+ansible-playbook -i 'vps,' create-applicationset.yaml --syntax-check
+ansible-playbook -i 'vps,' create-applicationset.yaml
+```
+
+To remove the current wrappers configuration, use the destructive playbook
+only when you are certain that it is the intended target:
+
+```bash
+ansible-playbook -i 'vps,' delete-applicationset.yaml \
+  -e confirm_delete_applications=true
+```
+
+Do not delete `site.yaml`. It is the desired-state playbook for the base
+infrastructure and should remain available to reapply or verify that state.
