@@ -21,8 +21,8 @@
   no_log: true
 
 # The only Argo CD object created by hand. It turns every <name>-<env>.yaml
-# in argocd-wrapper/ of helm-charts-wrappers into an Application whose name
-# matches the filename without its .yaml suffix.
+# in argocd-wrapper/ into a root Application. That Application renders the
+# argocd-wrapper chart, which creates the workload Application.
 # The {{ }} below belong to Argo CD, so !unsafe stops Ansible from reading them.
 - name: Create the ApplicationSet of the applications
   ansible.builtin.command:
@@ -33,7 +33,7 @@
       apiVersion: argoproj.io/v1alpha1
       kind: ApplicationSet
       metadata:
-        name: applications
+        name: applicationset
         namespace: "{{ argocd_namespace }}"
       spec:
         goTemplate: true
@@ -46,7 +46,7 @@
                 - path: argocd-wrapper/*-*.yaml
         template:
           metadata:
-            name: !unsafe '{{ trimSuffix ".yaml" .path.filename }}'
+            name: !unsafe '{{ trimSuffix ".yaml" .path.filename }}-root'
           spec:
             project: default
             source:
@@ -69,5 +69,7 @@
               automated:
                 prune: true
                 selfHeal: true
+              syncOptions:
+                - CreateNamespace=true
   register: argocd_namespaces_appset
   changed_when: "'unchanged' not in argocd_namespaces_appset.stdout"

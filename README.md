@@ -24,6 +24,13 @@ roles/       tasks for each part of the server
 - `kubeconfig.yaml`: copies the kubeconfig to our computer.
 - `check.yaml`: shows the status of the node and any Argo CD applications.
 
+The ApplicationSet discovers `<name>-<env>.yaml` files in `argocd-wrapper/`
+and creates one root Application per file. Each root Application renders the
+`argocd-wrapper` chart, which creates the workload Applications and their
+namespaces. Root Applications use the `-root` suffix to avoid colliding with
+the workload Application names. The workload Helm charts live under
+`app-wrapper/`.
+
 ## Before starting
 
 We need:

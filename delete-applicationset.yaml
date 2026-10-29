@@ -23,7 +23,7 @@
       ansible.builtin.command:
         cmd: >-
           k3s kubectl -n {{ argocd_namespace }}
-          delete applicationset applications
+          delete applicationset applicationset
           --ignore-not-found
       changed_when: true
 
