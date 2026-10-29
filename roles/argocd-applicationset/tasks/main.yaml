@@ -20,9 +20,9 @@
   when: wrappers_deploy_key | default('') | length > 0
   no_log: true
 
-# The only Argo CD object created by hand. It turns every <name>-<env>.yaml
-# in argocd-wrapper/ into a root Application. That Application renders the
-# argocd-wrapper chart, which creates the workload Application.
+# The only Argo CD object created by hand. It turns every environment values
+# file in argocd-wrapper/ into one environment Application. That Application
+# renders the argocd-wrapper chart, which creates the workload Applications.
 # The {{ }} below belong to Argo CD, so !unsafe stops Ansible from reading them.
 - name: Create the ApplicationSet of the applications
   ansible.builtin.command:
@@ -43,10 +43,10 @@
               repoURL: "{{ wrappers_repo }}"
               revision: "{{ wrappers_revision }}"
               files:
-                - path: argocd-wrapper/*-*.yaml
+                - path: argocd-wrapper/*.yaml
         template:
           metadata:
-            name: !unsafe '{{ trimSuffix ".yaml" .path.filename }}-root'
+            name: !unsafe '{{ trimSuffix ".yaml" .path.filename }}'
           spec:
             project: default
             source:
