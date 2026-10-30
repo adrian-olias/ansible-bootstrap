@@ -7,6 +7,7 @@
     - vars/connection.yaml
     - vars/server.yaml
     - vars/argocd.yaml
+    - vars/applications.yaml
     - vars/sealed-secrets.yaml
     - vars/kubeconfig.yaml
   roles:
