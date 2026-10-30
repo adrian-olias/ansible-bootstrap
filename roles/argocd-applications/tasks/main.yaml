@@ -20,17 +20,6 @@
   when: wrappers_deploy_key | default('') | length > 0
   no_log: true
 
-- name: Orphan the legacy ApplicationSet before renaming it
-  ansible.builtin.command: >-
-    k3s kubectl -n {{ argocd_namespace }}
-    delete applicationset {{ legacy_applicationset_name }}
-    --cascade=orphan --ignore-not-found
-  register: legacy_applicationset_result
-  changed_when: "'deleted' in legacy_applicationset_result.stdout"
-  when:
-    - legacy_applicationset_name | default('') | length > 0
-    - legacy_applicationset_name != applicationset_name
-
 - name: Create the applications namespace and ApplicationSet
   ansible.builtin.command:
     cmd: k3s kubectl apply -f -
