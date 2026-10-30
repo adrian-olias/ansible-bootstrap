@@ -93,6 +93,8 @@
                   revision: "{{ wrappers_revision }}"
                   files:
                     - path: argocd-wrapper/*.yaml
+                    - path: argocd-wrapper/Chart.yaml
+                      exclude: true
             template:
               metadata:
                 name: !unsafe '{{ trimSuffix ".yaml" .path.filename }}'

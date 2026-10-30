@@ -21,8 +21,9 @@ roles/       tasks for each part of the server
 - `check.yaml`: shows the status of the node and any Argo CD applications.
 
 The `argocd-applications` ApplicationSet lives in the Argo CD control-plane
-namespace and discovers every `argocd-wrapper/*.yaml` file in the private
-wrappers repository. Each file becomes an environment Application in the
+namespace and discovers the environment values files in the private wrappers
+repository, excluding the wrapper's `Chart.yaml`. Each file becomes an
+environment Application in the
 `applications-prod` namespace. That Application renders the environment
 values and creates the workload Applications, which deploy into their own
 namespaces. Adding `staging.yaml` therefore requires only a commit to the
