@@ -1,4 +1,4 @@
-- name: Create the Argo CD ApplicationSet
+- name: Bootstrap the Argo CD ApplicationSet
   hosts: vps
   connection: ssh
   become: true
@@ -8,5 +8,5 @@
     - vars/argocd.yaml
     - vars/applications.yaml
   roles:
-    - role: argocd-applicationset
-      tags: [argocd-applicationset]
+    - role: argocd-applications
+      tags: [argocd-applications]

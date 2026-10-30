@@ -1,3 +1,11 @@
+# Namespace that holds the generated environment Applications.
+applications_namespace: applications-prod
+
+# Stable, environment-neutral name of the ApplicationSet.
+applicationset_name: argocd-applications
+# Previous name, kept only to perform the one-time non-cascading migration.
+legacy_applicationset_name: applications-prod
+
 wrappers_repo: git@github.com:adrian-olias/helm-charts-wrappers.git
 wrappers_revision: main
 wrappers_deploy_key: ~/.ssh/helm_charts_wrappers_deploy

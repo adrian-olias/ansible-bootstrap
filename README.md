@@ -15,20 +15,28 @@ roles/       tasks for each part of the server
 ## Playbooks
 
 - `site.yaml`: sets up the infrastructure. It can be run again.
-- `create-applicationset.yaml`: creates the Argo CD ApplicationSet
-  from
-  `helm-charts-wrappers`. Run it only after that repository and its charts are
-  ready.
-- `delete-applicationset.yaml`: removes the wrappers ApplicationSet and its
-  generated application after explicit confirmation.
+- `bootstrap-applicationset.yaml`: idempotently bootstraps the repository
+  access, AppProject and ApplicationSet used by Argo CD.
 - `kubeconfig.yaml`: copies the kubeconfig to our computer.
 - `check.yaml`: shows the status of the node and any Argo CD applications.
 
-The ApplicationSet discovers environment values files such as
-`argocd-wrapper/prod.yaml` and creates one environment Application per file.
-Each environment Application renders the `argocd-wrapper` chart, which creates
-the workload Applications and their per-application namespaces. The workload
-Helm charts live under `app-wrapper/`.
+The `argocd-applications` ApplicationSet lives in the Argo CD control-plane
+namespace and discovers every `argocd-wrapper/*.yaml` file in the private
+wrappers repository. Each file becomes an environment Application in the
+`applications-prod` namespace. That Application renders the environment
+values and creates the workload Applications, which deploy into their own
+namespaces. Adding `staging.yaml` therefore requires only a commit to the
+wrappers repository; no Ansible change is needed.
+
+Generated Applications have the resources finalizer, so removing an
+environment file intentionally removes that environment's resources through
+normal GitOps pruning. Deleting the ApplicationSet itself is a destructive
+operation because it cascades to generated Applications. If the
+ApplicationSet must be removed without cascading, use:
+
+```bash
+kubectl -n argocd delete applicationset argocd-applications --cascade=orphan
+```
 
 ## Before starting
 
@@ -54,12 +62,13 @@ of this repository.
 The playbooks load only the variable files they need:
 
 - `site.yaml`: connection, server, Sealed Secrets and kubeconfig;
-- `create-applicationset.yaml`: connection and Argo CD ApplicationSet configuration;
+- `bootstrap-applicationset.yaml`: connection and ApplicationSet bootstrap
+  configuration;
 - `check.yaml`: connection and Argo CD;
 - `kubeconfig.yaml`: connection and kubeconfig.
 
 If `helm-charts-wrappers` is private, create a deploy key before running
-`create-applicationset.yaml` and add it on GitHub:
+`bootstrap-applicationset.yaml` and add it on GitHub:
 
 ```bash
 ssh-keygen -t ed25519 -N "" -C "argocd" \
@@ -119,21 +128,18 @@ To check the cluster status at any time:
 ansible-playbook -i 'vps,' check.yaml
 ```
 
-After the charts and wrappers repository are ready, configure the Argo CD
-applications with:
+After the charts and wrappers repository are ready, bootstrap the
+ApplicationSet with:
 
 ```bash
-ansible-playbook -i 'vps,' create-applicationset.yaml --syntax-check
-ansible-playbook -i 'vps,' create-applicationset.yaml
+ansible-playbook -i 'vps,' bootstrap-applicationset.yaml --syntax-check
+ansible-playbook -i 'vps,' bootstrap-applicationset.yaml
 ```
 
-To remove the current wrappers configuration, use the destructive playbook
-only when you are certain that it is the intended target:
-
-```bash
-ansible-playbook -i 'vps,' delete-applicationset.yaml \
-  -e confirm_delete_applications=true
-```
+After that, add or remove environment files and application wrappers in
+`helm-charts-wrappers`; Argo CD reconciles the generated Applications. If a
+complete teardown is ever required, delete the generated Applications
+explicitly and intentionally, then remove the ApplicationSet and its project.
 
 Do not delete `site.yaml`. It is the desired-state playbook for the base
 infrastructure and should remain available to reapply or verify that state.

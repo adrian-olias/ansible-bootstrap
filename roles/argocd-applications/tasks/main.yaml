@@ -1,0 +1,139 @@
+- name: Give Argo CD read access to helm-charts-wrappers
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f -
+    stdin: "{{ repo_secret | to_json }}"
+  vars:
+    repo_secret:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: repo-helm-charts-wrappers
+        namespace: "{{ argocd_namespace }}"
+        labels:
+          argocd.argoproj.io/secret-type: repository
+      stringData:
+        type: git
+        url: "{{ wrappers_repo }}"
+        sshPrivateKey: "{{ lookup('ansible.builtin.file', wrappers_deploy_key | expanduser) }}"
+  register: argocd_repo_secret
+  changed_when: "'unchanged' not in argocd_repo_secret.stdout"
+  when: wrappers_deploy_key | default('') | length > 0
+  no_log: true
+
+- name: Orphan the legacy ApplicationSet before renaming it
+  ansible.builtin.command: >-
+    k3s kubectl -n {{ argocd_namespace }}
+    delete applicationset {{ legacy_applicationset_name }}
+    --cascade=orphan --ignore-not-found
+  register: legacy_applicationset_result
+  changed_when: "'deleted' in legacy_applicationset_result.stdout"
+  when:
+    - legacy_applicationset_name | default('') | length > 0
+    - legacy_applicationset_name != applicationset_name
+
+- name: Create the applications namespace and ApplicationSet
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f -
+    stdin: "{{ applications_appset | to_json }}"
+  vars:
+    applications_appset:
+      apiVersion: v1
+      kind: List
+      items:
+        - apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ applications_namespace }}"
+        - apiVersion: argoproj.io/v1alpha1
+          kind: AppProject
+          metadata:
+            name: "{{ applications_namespace }}"
+            namespace: "{{ argocd_namespace }}"
+          spec:
+            description: Applications managed by the {{ applications_namespace }} root
+            sourceRepos:
+              - "{{ wrappers_repo }}"
+            sourceNamespaces:
+              - "{{ applications_namespace }}"
+            destinations:
+              # The children each deploy to their own namespace, so any
+              # namespace of the local cluster is allowed.
+              - server: https://kubernetes.default.svc
+                namespace: "*"
+        - apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: "argocd-server-{{ applications_namespace }}"
+          rules:
+            - apiGroups:
+                - argoproj.io
+              resources:
+                - applications
+              verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
+                - patch
+                - delete
+        - apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: "argocd-server-{{ applications_namespace }}"
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: "argocd-server-{{ applications_namespace }}"
+          subjects:
+            - kind: ServiceAccount
+              name: argocd-server
+              namespace: "{{ argocd_namespace }}"
+        - apiVersion: argoproj.io/v1alpha1
+          kind: ApplicationSet
+          metadata:
+            name: "{{ applicationset_name }}"
+            namespace: "{{ argocd_namespace }}"
+          spec:
+            goTemplate: true
+            goTemplateOptions:
+              - missingkey=error
+            generators:
+              - git:
+                  repoURL: "{{ wrappers_repo }}"
+                  revision: "{{ wrappers_revision }}"
+                  files:
+                    - path: argocd-wrapper/*.yaml
+            template:
+              metadata:
+                name: !unsafe '{{ trimSuffix ".yaml" .path.filename }}'
+                namespace: "{{ applications_namespace }}"
+                finalizers:
+                  - resources-finalizer.argocd.argoproj.io
+              spec:
+                project: "{{ applications_namespace }}"
+                source:
+                  repoURL: "{{ wrappers_repo }}"
+                  targetRevision: "{{ wrappers_revision }}"
+                  path: argocd-wrapper
+                  helm:
+                    valueFiles:
+                      - !unsafe '{{ .path.filename }}'
+                    valuesObject:
+                      argocd-template:
+                        argocdNamespace: "{{ applications_namespace }}"
+                        repo:
+                          url: "{{ wrappers_repo }}"
+                          revision: "{{ wrappers_revision }}"
+                destination:
+                  server: https://kubernetes.default.svc
+                  namespace: "{{ applications_namespace }}"
+                syncPolicy:
+                  automated:
+                    prune: true
+                    selfHeal: true
+                  syncOptions:
+                    - CreateNamespace=true
+                    - PruneLast=true
+  register: applications_appset_result
+  changed_when: "'unchanged' not in applications_appset_result.stdout"
