@@ -29,6 +29,8 @@
           configs:
             params:
               application.namespaces: "{{ applications_namespace }}"
+            rbac:
+              policy.default: role:readonly
 
 # The Helm controller needs a moment to pick the chart up, so the
 # Deployment may not exist yet on the first tries.
