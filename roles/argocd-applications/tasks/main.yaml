@@ -20,7 +20,9 @@
   when: wrappers_deploy_key | default('') | length > 0
   no_log: true
 
-- name: Create the applications namespace and ApplicationSet
+# Every Application lives in the Argo CD namespace. Each child deploys to
+# its own namespace, which Argo CD creates with CreateNamespace.
+- name: Create the AppProject and ApplicationSet
   ansible.builtin.command:
     cmd: k3s kubectl apply -f -
     stdin: "{{ applications_appset | to_json }}"
@@ -29,55 +31,25 @@
       apiVersion: v1
       kind: List
       items:
-        - apiVersion: v1
-          kind: Namespace
-          metadata:
-            name: "{{ applications_namespace }}"
         - apiVersion: argoproj.io/v1alpha1
           kind: AppProject
           metadata:
-            name: "{{ applications_namespace }}"
+            name: "{{ applications_project }}"
             namespace: "{{ argocd_namespace }}"
           spec:
-            description: Applications managed by the {{ applications_namespace }} root
+            description: Environment Applications and their children
             sourceRepos:
               - "{{ wrappers_repo }}"
-            sourceNamespaces:
-              - "{{ applications_namespace }}"
             destinations:
               # The children each deploy to their own namespace, so any
               # namespace of the local cluster is allowed.
               - server: https://kubernetes.default.svc
                 namespace: "*"
-        - apiVersion: rbac.authorization.k8s.io/v1
-          kind: ClusterRole
-          metadata:
-            name: "argocd-server-{{ applications_namespace }}"
-          rules:
-            - apiGroups:
-                - argoproj.io
-              resources:
-                - applications
-              verbs:
-                - get
-                - list
-                - watch
-                - create
-                - update
-                - patch
-                - delete
-        - apiVersion: rbac.authorization.k8s.io/v1
-          kind: ClusterRoleBinding
-          metadata:
-            name: "argocd-server-{{ applications_namespace }}"
-          roleRef:
-            apiGroup: rbac.authorization.k8s.io
-            kind: ClusterRole
-            name: "argocd-server-{{ applications_namespace }}"
-          subjects:
-            - kind: ServiceAccount
-              name: argocd-server
-              namespace: "{{ argocd_namespace }}"
+            # CreateNamespace needs this. Any other cluster-wide resource
+            # stays forbidden.
+            clusterResourceWhitelist:
+              - group: ""
+                kind: Namespace
         - apiVersion: argoproj.io/v1alpha1
           kind: ApplicationSet
           metadata:
@@ -98,11 +70,11 @@
             template:
               metadata:
                 name: !unsafe '{{ trimSuffix ".yaml" .path.filename }}'
-                namespace: "{{ applications_namespace }}"
+                namespace: "{{ argocd_namespace }}"
                 finalizers:
                   - resources-finalizer.argocd.argoproj.io
               spec:
-                project: "{{ applications_namespace }}"
+                project: "{{ applications_project }}"
                 source:
                   repoURL: "{{ wrappers_repo }}"
                   targetRevision: "{{ wrappers_revision }}"
@@ -110,21 +82,23 @@
                   helm:
                     valueFiles:
                       - !unsafe '{{ .path.filename }}'
+                    # Platform settings come from here, not from the
+                    # environment files, so they cannot drift apart.
                     valuesObject:
                       argocd-template:
-                        argocdNamespace: "{{ applications_namespace }}"
+                        argocdNamespace: "{{ argocd_namespace }}"
+                        project: "{{ applications_project }}"
                         repo:
                           url: "{{ wrappers_repo }}"
                           revision: "{{ wrappers_revision }}"
                 destination:
                   server: https://kubernetes.default.svc
-                  namespace: "{{ applications_namespace }}"
+                  namespace: "{{ argocd_namespace }}"
                 syncPolicy:
                   automated:
                     prune: true
                     selfHeal: true
                   syncOptions:
-                    - CreateNamespace=true
                     - PruneLast=true
   register: applications_appset_result
   changed_when: "'unchanged' not in applications_appset_result.stdout"

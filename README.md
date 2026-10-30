@@ -23,11 +23,13 @@ roles/       tasks for each part of the server
 The `argocd-applications` ApplicationSet lives in the Argo CD control-plane
 namespace and discovers the environment values files in the private wrappers
 repository, excluding the wrapper's `Chart.yaml`. Each file becomes an
-environment Application in the
-`applications-prod` namespace. That Application renders the environment
-values and creates the workload Applications, which deploy into their own
-namespaces. Adding `staging.yaml` therefore requires only a commit to the
-wrappers repository; no Ansible change is needed.
+environment Application, such as `prod`. That Application renders the
+environment values and creates the workload Applications, such as
+`portfolio-prod`. Every Application lives in the Argo CD namespace and
+belongs to the `applications` AppProject. Each workload deploys into its
+own namespace, which Argo CD creates. Adding `staging.yaml` or a new app
+therefore requires only a commit to the wrappers repository; no Ansible
+change is needed.
 
 Generated Applications have the resources finalizer, so removing an
 environment file intentionally removes that environment's resources through

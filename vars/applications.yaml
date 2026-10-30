@@ -1,5 +1,6 @@
-# Namespace that holds the generated environment Applications.
-applications_namespace: applications-prod
+# AppProject of the environment Applications and their children. All of
+# them live in the Argo CD namespace, so the UI shows them by name only.
+applications_project: applications
 
 # Stable, environment-neutral name of the ApplicationSet.
 applicationset_name: argocd-applications

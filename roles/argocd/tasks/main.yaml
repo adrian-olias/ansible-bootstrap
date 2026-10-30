@@ -27,8 +27,6 @@
           dex:
             enabled: false
           configs:
-            params:
-              application.namespaces: "{{ applications_namespace }}"
             rbac:
               policy.default: role:readonly
 

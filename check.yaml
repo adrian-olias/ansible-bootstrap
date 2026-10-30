@@ -8,13 +8,12 @@
   vars_files:
     - vars/connection.yaml
     - vars/argocd.yaml
-    - vars/applications.yaml
   tasks:
     - name: Read nodes and Argo CD applications
       ansible.builtin.command: "{{ item }}"
       loop:
         - k3s kubectl get nodes -o wide
-        - k3s kubectl -n {{ applications_namespace }} get applications
+        - k3s kubectl -n {{ argocd_namespace }} get applicationsets,applications
       register: cluster_status
       changed_when: false
       failed_when: false
