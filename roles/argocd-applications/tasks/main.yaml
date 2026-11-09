@@ -66,6 +66,9 @@
             destinations:
               - server: https://kubernetes.default.svc
                 namespace: cert-manager
+              # The chart puts its leader-election Role and RoleBinding here.
+              - server: https://kubernetes.default.svc
+                namespace: kube-system
             clusterResourceWhitelist:
               - group: ""
                 kind: Namespace
