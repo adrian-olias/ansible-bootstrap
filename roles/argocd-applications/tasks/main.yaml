@@ -134,6 +134,28 @@
               automated:
                 prune: true
                 selfHeal: true
+        # Only Cloudflare may reach the HTTPS entrypoint of Traefik. The ranges
+        # live in helm-charts-wrappers/platform/traefik-cloudflare/values.yaml.
+        - apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata:
+            name: traefik-cloudflare
+            namespace: "{{ argocd_namespace }}"
+            finalizers:
+              - resources-finalizer.argocd.argoproj.io
+          spec:
+            project: platform
+            source:
+              repoURL: "{{ wrappers_repo }}"
+              targetRevision: "{{ wrappers_revision }}"
+              path: platform/traefik-cloudflare
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: kube-system
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
         - apiVersion: argoproj.io/v1alpha1
           kind: ApplicationSet
           metadata:
