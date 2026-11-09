@@ -50,6 +50,87 @@
             clusterResourceWhitelist:
               - group: ""
                 kind: Namespace
+        # Platform components need cluster-scoped resources (CRDs, ClusterRoles,
+        # webhooks, ClusterIssuer), so they get their own project, limited to
+        # the cert-manager namespace and the kinds it needs.
+        - apiVersion: argoproj.io/v1alpha1
+          kind: AppProject
+          metadata:
+            name: platform
+            namespace: "{{ argocd_namespace }}"
+          spec:
+            description: Cluster platform components
+            sourceRepos:
+              - https://charts.jetstack.io
+              - "{{ wrappers_repo }}"
+            destinations:
+              - server: https://kubernetes.default.svc
+                namespace: cert-manager
+            clusterResourceWhitelist:
+              - group: ""
+                kind: Namespace
+              - group: apiextensions.k8s.io
+                kind: CustomResourceDefinition
+              - group: rbac.authorization.k8s.io
+                kind: ClusterRole
+              - group: rbac.authorization.k8s.io
+                kind: ClusterRoleBinding
+              - group: admissionregistration.k8s.io
+                kind: ValidatingWebhookConfiguration
+              - group: admissionregistration.k8s.io
+                kind: MutatingWebhookConfiguration
+              - group: cert-manager.io
+                kind: ClusterIssuer
+        # cert-manager from the official Helm chart. installCRDs installs its CRDs.
+        - apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata:
+            name: cert-manager
+            namespace: "{{ argocd_namespace }}"
+            finalizers:
+              - resources-finalizer.argocd.argoproj.io
+          spec:
+            project: platform
+            source:
+              repoURL: https://charts.jetstack.io
+              chart: cert-manager
+              targetRevision: v1.17.2
+              helm:
+                valuesObject:
+                  installCRDs: true
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: cert-manager
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+              syncOptions:
+                - CreateNamespace=true
+        # The ClusterIssuer lives in Git (platform/cert-manager). It syncs after
+        # cert-manager, because its CRDs must exist first.
+        - apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata:
+            name: cert-manager-issuers
+            namespace: "{{ argocd_namespace }}"
+            annotations:
+              argocd.argoproj.io/sync-wave: "1"
+            finalizers:
+              - resources-finalizer.argocd.argoproj.io
+          spec:
+            project: platform
+            source:
+              repoURL: "{{ wrappers_repo }}"
+              targetRevision: "{{ wrappers_revision }}"
+              path: platform/cert-manager
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: cert-manager
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
         - apiVersion: argoproj.io/v1alpha1
           kind: ApplicationSet
           metadata:
