@@ -21,6 +21,14 @@ ansible-playbook -i 'vps,' site.yaml
 ansible-playbook -i 'vps,' bootstrap-applicationset.yaml
 ```
 
+## Argo CD UI
+
+```bash
+ssh -t -L 8080:127.0.0.1:8080 vps "sudo k3s kubectl port-forward -n argocd svc/argocd-server 8080:443"
+```
+
+Open `https://localhost:8080` (accept the self-signed certificate). User: `admin`.
+
 ## Notes
 
 - Port 6443 (Kubernetes API) is closed. Reach it with an SSH tunnel:
