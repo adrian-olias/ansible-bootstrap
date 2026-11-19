@@ -9,7 +9,6 @@
     - vars/argocd.yaml
     - vars/applications.yaml
     - vars/sealed-secrets.yaml
-    - vars/kubeconfig.yaml
   roles:
     - role: common
       tags: [common]
@@ -21,8 +20,6 @@
       tags: [sealed-secrets]
     - role: argocd
       tags: [argocd]
-    - role: kubeconfig
-      tags: [k3s, kubeconfig]
 
 - name: Show the state of the cluster
   ansible.builtin.import_playbook: check.yaml

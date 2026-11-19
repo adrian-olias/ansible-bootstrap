@@ -9,7 +9,6 @@ Run the playbooks from WSL or Linux. The VPS does not need Ansible.
 
 - `site.yaml`: sets up the server. Safe to run again.
 - `bootstrap-applicationset.yaml`: connects Argo CD to the GitOps repository.
-- `kubeconfig.yaml`: copies the kubeconfig to your computer.
 - `check.yaml`: shows the node and Argo CD status.
 
 ## Usage

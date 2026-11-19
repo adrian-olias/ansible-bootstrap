@@ -1,4 +1,4 @@
-# Never commit keys. The kubeconfig is copied to ~/.kube, outside the repo.
+# Never commit keys.
 *.pem
 *.key
 id_rsa*
